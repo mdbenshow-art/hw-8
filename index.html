@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SVM Kernel Trick 3D Visualization - 宇宙星空與支援向量機三維視覺化</title>
+  <!-- Google Fonts for premium typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-mode">
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo">
+        <i class="fa-solid fa-wand-magic-sparkles logo-icon"></i>
+        <h1>SVM Kernel Trick 3D Visualization</h1>
+      </div>
+      <div class="status-badge">
+        <span class="pulse-dot"></span>
+        <span id="model-status">SVM Ready</span>
+      </div>
+    </header>
+
+    <div class="main-layout">
+      <!-- Sidebar Controls -->
+      <aside class="sidebar">
+        <!-- Dataset Card -->
+        <div class="card" id="dataset-card">
+          <h2><i class="fa-solid fa-database card-icon"></i> 1. 資料集設定 (Datasets)</h2>
+          <div class="form-group">
+            <label for="dataset-select">選擇資料集分佈</label>
+            <div class="select-wrapper">
+              <select id="dataset-select">
+                <option value="circles" selected>同心圓環 (Concentric Circles)</option>
+                <option value="xor">XOR 交叉分佈 (XOR Pattern)</option>
+                <option value="moons">雙月夾角 (Two Moons)</option>
+                <option value="linear">線性可分 (Linearly Separable)</option>
+              </select>
+              <i class="fa-solid fa-chevron-down select-arrow"></i>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <div class="slider-header">
+              <label for="points-slider">資料點數量</label>
+              <span class="slider-value" id="points-value">120</span>
+            </div>
+            <input type="range" id="points-slider" min="40" max="250" step="10" value="120">
+          </div>
+
+          <div class="form-group">
+            <div class="slider-header">
+              <label for="noise-slider">雜訊干擾度 (Noise)</label>
+              <span class="slider-value" id="noise-value">0.10</span>
+            </div>
+            <input type="range" id="noise-slider" min="0.0" max="0.5" step="0.05" value="0.1">
+          </div>
+
+          <button id="regenerate-btn" class="btn primary-btn btn-full">
+            <i class="fa-solid fa-arrows-rotate"></i> 重新生成資料
+          </button>
+        </div>
+
+        <!-- SVM & Kernel Card -->
+        <div class="card" id="svm-card">
+          <h2><i class="fa-solid fa-microchip card-icon"></i> 2. 演算法與核函數 (Kernel)</h2>
+          <div class="form-group">
+            <label for="kernel-select">核函數種類 (Kernel Trick)</label>
+            <div class="select-wrapper">
+              <select id="kernel-select">
+                <option value="rbf" selected>徑向基底核 (RBF / Gaussian)</option>
+                <option value="poly">多項式核 (Polynomial)</option>
+                <option value="linear">線性核 (Linear)</option>
+              </select>
+              <i class="fa-solid fa-chevron-down select-arrow"></i>
+            </div>
+          </div>
+
+          <!-- Kernel specific params -->
+          <div class="form-group kernel-param" id="rbf-gamma-group">
+            <div class="slider-header">
+              <label for="rbf-gamma-slider">RBF 影響半徑 &gamma; (Gamma)</label>
+              <span class="slider-value" id="rbf-gamma-value">0.50</span>
+            </div>
+            <input type="range" id="rbf-gamma-slider" min="0.05" max="3.0" step="0.05" value="0.5">
+          </div>
+
+          <div class="form-group kernel-param hide" id="poly-degree-group">
+            <div class="slider-header">
+              <label for="poly-degree-slider">多項式次數 (Degree)</label>
+              <span class="slider-value" id="poly-degree-value">2</span>
+            </div>
+            <input type="range" id="poly-degree-slider" min="2" max="5" step="1" value="2">
+          </div>
+
+          <div class="form-group">
+            <div class="slider-header">
+              <label for="svm-c-slider">正規化參數 C (Soft Margin)</label>
+              <span class="slider-value" id="svm-c-value">1.00</span>
+            </div>
+            <input type="range" id="svm-c-slider" min="0.1" max="100.0" step="0.5" value="1.0">
+          </div>
+        </div>
+
+        <!-- Dimension Controls Card -->
+        <div class="card" id="viz-card">
+          <h2><i class="fa-solid fa-eye card-icon"></i> 3. 三維空間視覺化 (3D Lift)</h2>
+          
+          <div class="form-group">
+            <label for="lift-mode-select">高度軸 (Z-axis) 映射模型</label>
+            <div class="select-wrapper">
+              <select id="lift-mode-select">
+                <option value="feature" selected>特徵空間投影 (Feature Map)</option>
+                <option value="margin">決策超平面邊界 (SVM Margin)</option>
+              </select>
+              <i class="fa-solid fa-chevron-down select-arrow"></i>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="slider-header">
+              <label for="lift-slider">空間維度轉換 (Dimension Lift)</label>
+              <span class="slider-value" id="lift-value">0% (2D)</span>
+            </div>
+            <div class="lift-control-row">
+              <input type="range" id="lift-slider" min="0" max="100" value="0" class="lift-input">
+              <button id="play-lift-btn" class="btn icon-btn" title="播放升維動畫">
+                <i class="fa-solid fa-play"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="toggles-grid">
+            <label class="toggle-control">
+              <input type="checkbox" id="toggle-plane" checked>
+              <span class="control-indicator"></span>
+              分割超平面 (Hyperplane)
+            </label>
+            <label class="toggle-control">
+              <input type="checkbox" id="toggle-sv" checked>
+              <span class="control-indicator"></span>
+              支援向量 (Support Vectors)
+            </label>
+            <label class="toggle-control">
+              <input type="checkbox" id="toggle-contour" checked>
+              <span class="control-indicator"></span>
+              2D 決策界線投影
+            </label>
+            <label class="toggle-control">
+              <input type="checkbox" id="toggle-margin-planes">
+              <span class="control-indicator"></span>
+              邊界間隔面 (Margin Planes)
+            </label>
+          </div>
+        </div>
+
+        <!-- Add Point Instructions -->
+        <div class="card help-card">
+          <p><i class="fa-solid fa-circle-info"></i> <strong>提示：</strong> 您可以直接在 3D 場景的網格面上<strong>點擊滑鼠左鍵</strong>，動態新增資料點！(預設新增藍色 Class +1，按住 <code>Shift</code> 鍵點擊可新增粉紅色 Class -1)。</p>
+        </div>
+      </aside>
+
+      <!-- Visualizer Canvas & Dashboard -->
+      <main class="visualizer-container">
+        <!-- SVM Training Stats Dashboard -->
+        <section class="stats-dashboard">
+          <div class="stat-box">
+            <span class="stat-label">SVM 收斂狀態</span>
+            <span class="stat-value text-gradient" id="stat-convergence">-</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">支援向量個數 (SVs)</span>
+            <span class="stat-value" id="stat-sv-count">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">訓練集分類準確率</span>
+            <span class="stat-value" id="stat-accuracy">0.0%</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">迭代迭代次數 (Epochs)</span>
+            <span class="stat-value" id="stat-epochs">0</span>
+          </div>
+        </section>
+
+        <!-- 3D WebGL Canvas Area -->
+        <div class="canvas-viewport" id="canvas-container">
+          <div id="loading-overlay">
+            <div class="spinner"></div>
+            <span>初始化 WebGL 3D 空間...</span>
+          </div>
+          <div class="canvas-overlay-ui">
+            <button id="reset-camera-btn" class="btn glass-btn">
+              <i class="fa-solid fa-camera"></i> 重設視角
+            </button>
+            <div class="legend-panel">
+              <div class="legend-item"><span class="legend-dot class-a"></span>類別 +1</div>
+              <div class="legend-item"><span class="legend-dot class-b"></span>類別 -1</div>
+              <div class="legend-item"><span class="legend-dot sv-ring"></span>支援向量</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explanation Footer -->
+        <footer class="math-explainer">
+          <h3>數學原理說明 (The Mathematics Behind Kernel Trick)</h3>
+          <div class="math-grid">
+            <div class="math-formula-box">
+              <h4>1. 低維度空間的非線性 (2D Space)</h4>
+              <p>資料點在二維平面上無法使用任何直線將其完美分開。SVM 需要尋找一個決策界線：</p>
+              <div class="equation">$$f(\mathbf{x}) = \sum_{i=1}^N \alpha_i y_i K(\mathbf{x}_i, \mathbf{x}) + b$$</div>
+            </div>
+            <div class="math-formula-box">
+              <h4>2. 核函數升維 (Dimension Lifting)</h4>
+              <p>藉由核函數 $K(\mathbf{x}_i, \mathbf{x}) = \langle \Phi(\mathbf{x}_i), \Phi(\mathbf{x}) \rangle$，將資料對應至三維空間的 Z 軸座標：</p>
+              <div class="equation">
+                <span id="math-kernel-formula">RBF 核函數：$z = e^{-\gamma \|\mathbf{x} - \mathbf{x}_j\|^2}$</span>
+              </div>
+            </div>
+            <div class="math-formula-box">
+              <h4>3. 高維度空間線性可分 (3D Hyperplane)</h4>
+              <p>在升維後的三維空間中，我們可以插入一片平坦的 **二維超平面 (Z = 0)** 完美切割兩類資料。超平面投影回二維時，即形成平滑的非線性界線！</p>
+            </div>
+          </div>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <!-- Loading Three.js and OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  
+  <!-- MathJax for rendering math formulas beautifully -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      },
+      svg: {
+        fontCache: 'global'
+      }
+    };
+  </script>
+  <script type="text/javascript" id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+  </script>
+
+  <!-- Core App Scripts -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
