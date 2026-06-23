@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="dark-mode">
+<body class="light-mode">
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
@@ -29,6 +29,20 @@
     <div class="main-layout">
       <!-- Sidebar Controls -->
       <aside class="sidebar">
+        <!-- Tutorial Steps Card -->
+        <div class="card" id="tutorial-card">
+          <h2><i class="fa-solid fa-graduation-cap card-icon"></i> 互動教學引導 (Tutorial)</h2>
+          <div class="steps-container">
+            <button class="step-btn active" id="btn-step-1" data-step="1">1. 原始 2D 空間</button>
+            <button class="step-btn" id="btn-step-2" data-step="2">2. 3D 非線性投影</button>
+            <button class="step-btn" id="btn-step-3" data-step="3">3. SVM 線性分割</button>
+            <button class="step-btn" id="btn-step-4" data-step="4">4. 投影回 2D 平面</button>
+          </div>
+          <div class="step-explainer-box" id="step-explainer">
+            <!-- Dynamic explanation text will be inserted here by JavaScript -->
+          </div>
+        </div>
+
         <!-- Dataset Card -->
         <div class="card" id="dataset-card">
           <h2><i class="fa-solid fa-database card-icon"></i> 1. 資料集設定 (Datasets)</h2>
@@ -155,6 +169,11 @@
               <input type="checkbox" id="toggle-margin-planes">
               <span class="control-indicator"></span>
               邊界間隔面 (Margin Planes)
+            </label>
+            <label class="toggle-control">
+              <input type="checkbox" id="toggle-surface" checked>
+              <span class="control-indicator"></span>
+              特徵投影曲面 (Feature Surface)
             </label>
           </div>
         </div>

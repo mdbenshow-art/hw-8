@@ -16,6 +16,8 @@ const state = {
   showSV: true,
   showContour: true,
   showMarginPlanes: false,
+  showSurface: true,       // Toggle feature mapping paraboloid/dome surface
+  activeStep: 1,           // Tutorial step
   
   // Data arrays
   points2D: [],            // [[x, y], ...]
@@ -32,6 +34,7 @@ let containerEl, loadingOverlayEl;
 let pointsMeshGroup = [];  // Array of meshes representing data points
 let svRingsGroup = [];     // Golden rings around support vectors
 let hyperplaneMesh = null;
+let featureSurfaceMesh = null; // Underlying feature mapping mesh
 let marginPlaneMeshPos = null;
 let marginPlaneMeshNeg = null;
 let groundPlaneMesh = null;
@@ -67,7 +70,7 @@ function init() {
   trainModels();
   
   // Render and update
-  updateVisualization();
+  setTutorialStep(1);
   animate();
   
   // Hide loading screen
@@ -84,10 +87,10 @@ function initThree() {
   
   // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x08060c);
+  scene.background = new THREE.Color(0xffffff);
   
-  // Fog for deep space look
-  scene.fog = new THREE.FogExp2(0x08060c, 0.04);
+  // Fog for clean white look
+  scene.fog = new THREE.FogExp2(0xffffff, 0.04);
   
   // Camera
   camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
@@ -116,12 +119,12 @@ function initThree() {
   dirLight1.position.set(5, 10, 7);
   scene.add(dirLight1);
   
-  const dirLight2 = new THREE.DirectionalLight(0x8a2be2, 0.4); // purple glow light
+  const dirLight2 = new THREE.DirectionalLight(0xa5b4fc, 0.45); // soft blue-purple light
   dirLight2.position.set(-5, -5, 5);
   scene.add(dirLight2);
 
-  // Reference Grid Floor (Subtle grid lines)
-  const gridHelper = new THREE.GridHelper(16, 32, 0x8a2be2, 0x22173b);
+  // Reference Grid Floor (Subtle grid lines for light mode)
+  const gridHelper = new THREE.GridHelper(16, 32, 0x7c3aed, 0xe2e8f0);
   gridHelper.rotation.x = Math.PI / 2; // Lie flat on XY plane
   gridHelper.position.z = -0.01;
   scene.add(gridHelper);
@@ -130,7 +133,7 @@ function initThree() {
   const axisLength = 8;
   const xGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-axisLength, 0, 0), new THREE.Vector3(axisLength, 0, 0)]);
   const yGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -axisLength, 0), new THREE.Vector3(0, axisLength, 0)]);
-  const axisMat = new THREE.LineBasicMaterial({ color: 0x4a3f70, opacity: 0.5, transparent: true });
+  const axisMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, opacity: 0.6, transparent: true });
   scene.add(new THREE.Line(xGeo, axisMat));
   scene.add(new THREE.Line(yGeo, axisMat));
 
@@ -161,7 +164,7 @@ function initGroundPlane() {
   const planeMat = new THREE.MeshBasicMaterial({
     map: groundTexture,
     transparent: true,
-    opacity: 0.7,
+    opacity: 0.85,
     side: THREE.DoubleSide,
     depthWrite: false // Avoid z-fighting with grid and points
   });
@@ -378,6 +381,9 @@ function updateVisualization() {
   
   // 3. Draw Hyperplane and Margin Surfaces
   drawSeparatingSurfaces();
+  
+  // 4. Draw Feature Mapping Projection Surface
+  drawFeatureSurface();
 }
 
 function clearSceneObjects() {
@@ -394,6 +400,11 @@ function clearSceneObjects() {
     scene.remove(hyperplaneMesh);
     hyperplaneMesh.geometry.dispose();
     hyperplaneMesh = null;
+  }
+  if (featureSurfaceMesh) {
+    scene.remove(featureSurfaceMesh);
+    featureSurfaceMesh.geometry.dispose();
+    featureSurfaceMesh = null;
   }
   if (marginPlaneMeshPos) {
     scene.remove(marginPlaneMeshPos);
@@ -413,17 +424,17 @@ function drawDataPoints() {
   
   // Color materials
   const matA = new THREE.MeshPhongMaterial({
-    color: 0x00f2fe,
-    emissive: 0x00a8c6,
-    shininess: 30,
+    color: 0x0284c7,
+    emissive: 0x002c44,
+    shininess: 35,
     transparent: true,
     opacity: 0.95
   });
   
   const matB = new THREE.MeshPhongMaterial({
-    color: 0xff007f,
-    emissive: 0xb5005b,
-    shininess: 30,
+    color: 0xdb2777,
+    emissive: 0x470420,
+    shininess: 35,
     transparent: true,
     opacity: 0.95
   });
@@ -494,21 +505,21 @@ function drawGroundHeatmap() {
       const idx = (py * w + px) * 4;
       
       if (val > 0) {
-        // Class +1: Cyan gradient
-        // Blend from white (val close to 0) to Cyan [0, 242, 254]
+        // Class +1: Cyan/Blue gradient
+        // Blend from white (val close to 0) to Cyan [2, 132, 199]
         const intensity = Math.min(Math.abs(val) * 0.4, 0.7);
-        imgData.data[idx] = Math.floor(0 * intensity + 26 * (1 - intensity)); // panel-bg R = 18
-        imgData.data[idx + 1] = Math.floor(242 * intensity + 14 * (1 - intensity)); // G = 14
-        imgData.data[idx + 2] = Math.floor(254 * intensity + 28 * (1 - intensity)); // B = 28
-        imgData.data[idx + 3] = Math.floor(255 * (0.05 + intensity * 0.45)); // Alpha
+        imgData.data[idx] = Math.floor(2 * intensity + 255 * (1 - intensity)); 
+        imgData.data[idx + 1] = Math.floor(132 * intensity + 255 * (1 - intensity)); 
+        imgData.data[idx + 2] = Math.floor(199 * intensity + 255 * (1 - intensity)); 
+        imgData.data[idx + 3] = Math.floor(255 * (0.15 + intensity * 0.55)); // Alpha
       } else {
-        // Class -1: Magenta gradient
-        // Blend from white (val close to 0) to Magenta [255, 0, 127]
+        // Class -1: Magenta/Rose gradient
+        // Blend from white (val close to 0) to Rose [219, 39, 119]
         const intensity = Math.min(Math.abs(val) * 0.4, 0.7);
-        imgData.data[idx] = Math.floor(255 * intensity + 18 * (1 - intensity)); // R
-        imgData.data[idx + 1] = Math.floor(0 * intensity + 14 * (1 - intensity)); // G
-        imgData.data[idx + 2] = Math.floor(127 * intensity + 28 * (1 - intensity)); // B
-        imgData.data[idx + 3] = Math.floor(255 * (0.05 + intensity * 0.45)); // Alpha
+        imgData.data[idx] = Math.floor(219 * intensity + 255 * (1 - intensity)); 
+        imgData.data[idx + 1] = Math.floor(39 * intensity + 255 * (1 - intensity)); 
+        imgData.data[idx + 2] = Math.floor(119 * intensity + 255 * (1 - intensity)); 
+        imgData.data[idx + 3] = Math.floor(255 * (0.15 + intensity * 0.55)); // Alpha
       }
     }
   }
@@ -549,14 +560,13 @@ function drawGroundHeatmap() {
       
       // Zero boundary (decision boundary) - Black line
       if (Math.sign(v) !== Math.sign(vx) || Math.sign(v) !== Math.sign(vy)) {
-        // Check threshold for thinness
-        strokeData.data[idx] = 255;
-        strokeData.data[idx + 1] = 255;
-        strokeData.data[idx + 2] = 255;
+        strokeData.data[idx] = 15;
+        strokeData.data[idx + 1] = 23;
+        strokeData.data[idx + 2] = 42;
         strokeData.data[idx + 3] = 255;
       }
       
-      // Margins (f(x, y) = +/- 1) - Dotted/Subtle white line
+      // Margins (f(x, y) = +/- 1) - Dotted/Subtle gold line
       if (state.showMarginPlanes) {
         const m1 = v - 1.0;
         const m1x = vx - 1.0;
@@ -567,11 +577,11 @@ function drawGroundHeatmap() {
         
         if ((Math.sign(m1) !== Math.sign(m1x) || Math.sign(m1) !== Math.sign(m1y)) ||
             (Math.sign(m2) !== Math.sign(m2x) || Math.sign(m2) !== Math.sign(m2y))) {
-          // Yellowish dashed look
-          strokeData.data[idx] = 255;
-          strokeData.data[idx + 1] = 215;
-          strokeData.data[idx + 2] = 0;
-          strokeData.data[idx + 3] = 160;
+          // Amber/Gold line
+          strokeData.data[idx] = 180;
+          strokeData.data[idx + 1] = 83;
+          strokeData.data[idx + 2] = 9;
+          strokeData.data[idx + 3] = 180;
         }
       }
     }
@@ -705,6 +715,39 @@ function drawSeparatingSurfaces() {
     marginPlaneMeshNeg = new THREE.Mesh(marginGeoNeg, marginMat);
     scene.add(marginPlaneMeshNeg);
   }
+}
+
+// Draw the underlying mathematical surface of feature mapping
+function drawFeatureSurface() {
+  if (!state.showSurface) return;
+  
+  const liftFrac = state.liftPercent / 100;
+  if (liftFrac < 0.05) return; // Don't show if 2D/flat
+  
+  const gridRes = 30;
+  const bound = 8.0;
+  
+  const surfaceGeo = new THREE.PlaneGeometry(bound * 2, bound * 2, gridRes, gridRes);
+  const surfaceMat = new THREE.MeshBasicMaterial({
+    color: 0x7c3aed, // Purple wireframe
+    wireframe: true,
+    transparent: true,
+    opacity: 0.12 * liftFrac,
+    depthWrite: false
+  });
+  
+  const posAttr = surfaceGeo.attributes.position;
+  for (let i = 0; i < posAttr.count; i++) {
+    const x = posAttr.getX(i);
+    const y = posAttr.getY(i);
+    
+    const targetZ = getTargetZ([x, y]);
+    posAttr.setZ(i, targetZ * liftFrac);
+  }
+  surfaceGeo.computeVertexNormals();
+  
+  featureSurfaceMesh = new THREE.Mesh(surfaceGeo, surfaceMat);
+  scene.add(featureSurfaceMesh);
 }
 
 // --- Dynamic Point Addition via Clicking Canvas ---
@@ -906,9 +949,21 @@ function bindControls() {
   
   document.getElementById('toggle-margin-planes').addEventListener('change', (e) => {
     state.showMarginPlanes = e.target.checked;
-    // Redraw contour on floor and re-add separating plane height
     updateVisualization();
   });
+  
+  document.getElementById('toggle-surface').addEventListener('change', (e) => {
+    state.showSurface = e.target.checked;
+    updateVisualization();
+  });
+  
+  // Tutorial Steps Buttons
+  for (let s = 1; s <= 4; s++) {
+    const btn = document.getElementById(`btn-step-${s}`);
+    if (btn) {
+      btn.addEventListener('click', () => setTutorialStep(s));
+    }
+  }
   
   // Camera Reset
   document.getElementById('reset-camera-btn').addEventListener('click', resetCamera);
@@ -1036,6 +1091,20 @@ function updateSeparatingSurfacesPositions() {
     marginPlaneMeshNeg.geometry.attributes.position.needsUpdate = true;
     marginPlaneMeshNeg.material.opacity = 0.12 * liftFrac;
   }
+  
+  // Do the same for feature projection surface
+  if (state.showSurface && featureSurfaceMesh) {
+    const posAttrS = featureSurfaceMesh.geometry.attributes.position;
+    for (let i = 0; i < posAttrS.count; i++) {
+      const x = posAttrS.getX(i);
+      const y = posAttrS.getY(i);
+      const targetZS = getTargetZ([x, y]);
+      posAttrS.setZ(i, targetZS * liftFrac);
+    }
+    featureSurfaceMesh.geometry.computeVertexNormals();
+    featureSurfaceMesh.geometry.attributes.position.needsUpdate = true;
+    featureSurfaceMesh.material.opacity = 0.12 * liftFrac;
+  }
 }
 
 // --- Animation Loop ---
@@ -1084,3 +1153,179 @@ function onWindowResize() {
 
 // Run App on Load
 window.addEventListener('DOMContentLoaded', init);
+
+// --- Tutorial Steps Helper Functions ---
+function setTutorialStep(step) {
+  state.activeStep = step;
+  
+  // Update active button state
+  for (let s = 1; s <= 4; s++) {
+    const btn = document.getElementById(`btn-step-${s}`);
+    if (btn) {
+      if (s === step) btn.classList.add('active');
+      else btn.classList.remove('active');
+    }
+  }
+  
+  // Set slider UI references
+  const liftSlider = document.getElementById('lift-slider');
+  const liftVal = document.getElementById('lift-value');
+  
+  // Trigger specific step behavior
+  if (step === 1) {
+    // Step 1: 2D view
+    state.liftPercent = 0;
+    if (liftSlider) liftSlider.value = 0;
+    if (liftVal) liftVal.textContent = '0% (2D)';
+    
+    // Hide hyperplane, margins, surface
+    state.showPlane = false;
+    state.showMarginPlanes = false;
+    state.showSurface = false;
+    
+    // Uncheck UI toggles
+    document.getElementById('toggle-plane').checked = false;
+    document.getElementById('toggle-margin-planes').checked = false;
+    document.getElementById('toggle-surface').checked = false;
+    
+    // Show 2D contour/heatmap
+    state.showContour = true;
+    document.getElementById('toggle-contour').checked = true;
+    
+    updateVisualization();
+  } else if (step === 2) {
+    // Step 2: 3D lifting
+    state.liftPercent = 100;
+    if (liftSlider) liftSlider.value = 100;
+    if (liftVal) liftVal.textContent = '100% (3D)';
+    state.liftMode = 'feature';
+    document.getElementById('lift-mode-select').value = 'feature';
+    
+    // Show surface, hide hyperplane, margins, contour
+    state.showSurface = true;
+    state.showPlane = false;
+    state.showMarginPlanes = false;
+    state.showContour = false;
+    
+    document.getElementById('toggle-surface').checked = true;
+    document.getElementById('toggle-plane').checked = false;
+    document.getElementById('toggle-margin-planes').checked = false;
+    document.getElementById('toggle-contour').checked = false;
+    
+    updateVisualization();
+  } else if (step === 3) {
+    // Step 3: SVM Hyperplane
+    state.liftPercent = 100;
+    if (liftSlider) liftSlider.value = 100;
+    if (liftVal) liftVal.textContent = '100% (3D)';
+    state.liftMode = 'feature';
+    document.getElementById('lift-mode-select').value = 'feature';
+    
+    // Show hyperplane, margins, support vectors, surface, hide contour
+    state.showSurface = true;
+    state.showPlane = true;
+    state.showMarginPlanes = true;
+    state.showContour = false;
+    
+    document.getElementById('toggle-surface').checked = true;
+    document.getElementById('toggle-plane').checked = true;
+    document.getElementById('toggle-margin-planes').checked = true;
+    document.getElementById('toggle-contour').checked = false;
+    
+    updateVisualization();
+  } else if (step === 4) {
+    // Step 4: Project back to 2D
+    state.liftPercent = 0;
+    if (liftSlider) liftSlider.value = 0;
+    if (liftVal) liftVal.textContent = '0% (2D)';
+    
+    // Hide hyperplane/margins/surface in 2D, but show 2D contour and support vectors
+    state.showPlane = false;
+    state.showMarginPlanes = false;
+    state.showSurface = false;
+    state.showContour = true;
+    
+    document.getElementById('toggle-plane').checked = false;
+    document.getElementById('toggle-margin-planes').checked = false;
+    document.getElementById('toggle-surface').checked = false;
+    document.getElementById('toggle-contour').checked = true;
+    
+    updateVisualization();
+  }
+  
+  // Update explanation text
+  updateStepExplainerText();
+}
+
+function updateStepExplainerText() {
+  const explainer = document.getElementById('step-explainer');
+  if (!explainer) return;
+  
+  const step = state.activeStep;
+  const kernel = state.kernelType;
+  
+  let text = '';
+  if (step === 1) {
+    text = `
+      <h3><i class="fa-solid fa-layer-group"></i> 步驟 1：原始 2D 空間</h3>
+      <p>在此二維平面中，資料點呈現非線性分佈：</p>
+      <ul>
+        <li><b style="color: var(--class-a);">藍色點 (Class +1)</b> 位於內圈。</li>
+        <li><b style="color: var(--class-b);">粉紅點 (Class -1)</b> 包圍在外圈。</li>
+      </ul>
+      <p>此時<b>無法使用任何直線</b>將兩類完美切開（線性不可分）。</p>
+      <p class="highlight">線性 SVM 在此空間會失敗，我們需要利用核函數將其投影至高維空間！</p>
+    `;
+  } else if (step === 2) {
+    let formula = '';
+    let desc = '';
+    if (kernel === 'rbf') {
+      formula = `z = e^{-\\gamma \\|\\mathbf{x}\\|^2}`;
+      desc = `靠近原點的藍色點半徑小，對應的 Z 軸高度接近 1（高聳）；遠處的粉紅點半徑大，Z 軸高度接近 0（低平）。這形成了中央升起的<b>高斯鐘形曲面</b>。`;
+    } else if (kernel === 'poly') {
+      formula = `z = (\\mathbf{x} \\cdot \\mathbf{x}_j + 1)^{${state.polyDegree}}`;
+      desc = `中心區域的點因為距離原點近，Z 軸高度極低；外圍圈的點 Z 軸高度變高。這形成了一個<b>拋物面碗狀曲面</b>。`;
+    } else {
+      formula = `z = \\mathbf{w} \\cdot \\mathbf{x}`;
+      desc = `線性投影只會沿著特徵方向傾斜，不改變二維平面上的相對分佈。`;
+    }
+    
+    text = `
+      <h3><i class="fa-solid fa-up-long"></i> 步驟 2：3D 空間升維</h3>
+      <p>我們對每個二維點 $(x, y)$ 施加非線性映射，將其投影為 3D 空間座標 $(x, y, z)$：</p>
+      <div class="formula-box">\\( ${formula} \\)</div>
+      <p>${desc}</p>
+      <p class="highlight">原本在 2D 擠在一起的點，現在順著<b>特徵投影曲面 (Feature Surface)</b> 沿著 Z 軸被拉開了！</p>
+    `;
+  } else if (step === 3) {
+    text = `
+      <h3><i class="fa-solid fa-shield-halved"></i> 步驟 3：SVM 分割超平面</h3>
+      <p>在升維後的 3D 空間中，兩組點集在高度上分開，我們可以用一塊平坦的<b>二維超平面</b> 完美切割：</p>
+      <div class="formula-box">\\( w_1 x + w_2 y + w_3 z + b = 0 \\)</div>
+      <ul>
+        <li><b>紫色平面</b>：SVM 訓練出的分離超平面。</li>
+        <li><b><b style="color: var(--sv-color);">黃圈點</b></b>：離分割面最近的點，即為<b>支援向量 (Support Vectors)</b>，它們決定了分割平面的位置！</li>
+        <li><b>金黃色面</b>：展示了最大邊界距離 (Margin)。</li>
+      </ul>
+    `;
+  } else if (step === 4) {
+    let shapeDesc = '';
+    if (kernel === 'rbf') shapeDesc = '一個圓形界線';
+    else if (kernel === 'poly') shapeDesc = '一個橢圓或雙曲線邊界';
+    else shapeDesc = '一條直線';
+    
+    text = `
+      <h3><i class="fa-solid fa-down-long"></i> 步驟 4：投影回 2D 分類界線</h3>
+      <p>我們把 3D 中的超平面與投影曲面的交界截面投影回 2D xy 平面上...</p>
+      <p>這在二維平面上，就形成了一條<b>平滑的非線性決策界線</b>（即畫面底部的黑線：${shapeDesc}）！</p>
+      <p class="highlight">💡 <b>結論</b>：這就是 <b>Kernel Trick</b>。我們不需要在 2D 設計複雜的圓形或曲線，而是在 3D 中尋找線性平面，投影回來自然成為完美的非線性分類線！</p>
+    `;
+  }
+  
+  explainer.innerHTML = text;
+  
+  // Rerender math equations via MathJax
+  if (window.MathJax && typeof window.MathJax.typeset === 'function') {
+    window.MathJax.typeset();
+  }
+}
